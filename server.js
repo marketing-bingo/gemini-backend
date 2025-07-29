@@ -1,60 +1,42 @@
-import 'dotenv/config';
-import express from 'express';
-import fetch from 'node-fetch';
-import cors from 'cors';
+const express = require("express");
+const cors = require("cors");
+const fetch = require("node-fetch");
 
 const app = express();
-const port = process.env.PORT || 3000;
-
 app.use(cors());
 app.use(express.json());
 
-const askGemini = async (question) => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  console.log("🔑 GEMINI_API_KEY:", apiKey ? "[Present]" : "[Missing]");
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY; // You will set this in Render dashboard
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
-    {
+app.post("/ask", async (req, res) => {
+  const prompt = req.body.prompt;
+
+  try {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
         contents: [
           {
-            role: "user",
-            parts: [{ text: question }],
-          },
-        ],
-      }),
-    }
-  );
+            parts: [{ text: prompt }]
+          }
+        ]
+      })
+    });
 
-  const data = await response.json();
-  console.log("📥 Gemini API raw response:", JSON.stringify(data, null, 2));
+    const data = await response.json();
+    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
-  return (
-    data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-    "No response from Gemini."
-  );
-};
-
-app.post("/ask", async (req, res) => {
-  const question = req.body.question;
-  if (!question) {
-    return res.status(400).json({ error: "Missing question in request body." });
-  }
-
-  try {
-    const reply = await askGemini(question);
-    res.json({ reply });
+    res.json({ response: reply });
   } catch (error) {
-    console.error("❌ Error calling Gemini:", error);
-    res.status(500).json({ error: "Internal server error." });
+    console.error("Gemini API Error:", error);
+    res.status(500).json({ error: "Failed to contact Gemini AI." });
   }
 });
 
-app.listen(port, () => {
-  console.log(`🚀 Server listening on port ${port}`);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Gemini backend is running on port ${PORT}`);
 });
