@@ -1,54 +1,60 @@
-import express from "express";
-import cors from "cors";
-import fetch from "node-fetch";
-import dotenv from "dotenv";
-
-dotenv.config(); // Load .env file if running locally
+require("dotenv").config();
+const express = require("express");
+const fetch = require("node-fetch");
+const cors = require("cors");
 
 const app = express();
+const port = process.env.PORT || 3000;
+
 app.use(cors());
 app.use(express.json());
 
-// Gemini API endpoint
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent";
-
-app.post("/ask", async (req, res) => {
+const askGemini = async (question) => {
   const apiKey = process.env.GEMINI_API_KEY;
-  const userQuestion = req.body.question;
+  console.log("🔑 GEMINI_API_KEY:", apiKey ? "[Present]" : "[Missing]");
 
-  if (!apiKey) {
-    return res.status(500).json({ error: "Missing Gemini API key in environment variables." });
-  }
-
-  if (!userQuestion) {
-    return res.status(400).json({ error: "Missing 'question' in request body." });
-  }
-
-  try {
-    const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
+    {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         contents: [
           {
             role: "user",
-            parts: [{ text: userQuestion }]
-          }
-        ]
-      })
-    });
+            parts: [{ text: question }],
+          },
+        ],
+      }),
+    }
+  );
 
-    const data = await response.json();
-    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || "No response from Gemini.";
+  const data = await response.json();
+  console.log("📥 Gemini API raw response:", JSON.stringify(data, null, 2));
 
+  return (
+    data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+    "No response from Gemini."
+  );
+};
+
+app.post("/ask", async (req, res) => {
+  const question = req.body.question;
+  if (!question) {
+    return res.status(400).json({ error: "Missing question in request body." });
+  }
+
+  try {
+    const reply = await askGemini(question);
     res.json({ reply });
   } catch (error) {
-    console.error("Error talking to Gemini:", error);
+    console.error("❌ Error calling Gemini:", error);
     res.status(500).json({ error: "Internal server error." });
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ Server running on http://localhost:${PORT}`));
+app.listen(port, () => {
+  console.log(`🚀 Server listening on port ${port}`);
+});
